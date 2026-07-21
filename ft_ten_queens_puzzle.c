@@ -6,11 +6,10 @@
 /*   By: q- <q-@student.42.fr>                      +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/21 02:29:22 by q-                #+#    #+#             */
-/*   Updated: 2026/07/21 13:59:03 by q-               ###   ########.fr       */
+/*   Updated: 2026/07/21 14:06:22 by q-               ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
-int glob = 14;
 #include <unistd.h>
 
 static int	absolute(int b)
@@ -26,7 +25,7 @@ static void	print_position(int *board)
 	int	i;
 
 	i = 0;
-	while (i < glob)
+	while (i < 10)
 		write(1, &(char){board[i++] + '0'}, 1);
 	write(1, "\n", 1);
 }
@@ -51,17 +50,17 @@ static void	place(int *board, int col, int *pos)
 	int	row;
 
 	row = 0;
-	if (col == glob)
+	if (col == 10)
 		return ;
-	while (row < glob)
+	while (row < 10)
 	{
 		if (is_valid(board, col, row))
 		{
 			board[col] = row;
-			if (col == glob - 1)
+			if (col == 9)
 			{
 				(*pos)++;
-				// print_position(board);
+				print_position(board);
 				break ;
 			}
 			place(board, col + 1, pos);
@@ -73,15 +72,9 @@ static void	place(int *board, int col, int *pos)
 int	ft_ten_queens_puzzle(void)
 {
 	int	pos;
-	int	chess_board[glob];
+	int	chess_board[10];
 
 	pos = 0;
 	place(chess_board, 0, &pos);
 	return (pos);
-}
-#include <stdio.h>
-
-int	main()
-{
-	printf("%d\n", ft_ten_queens_puzzle());
 }
