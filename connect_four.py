@@ -1,7 +1,7 @@
-"""Connect Five Game in Python Arcade - 3-Player Edition.
+"""Connect Four Game in Python Arcade - 3-Player Edition.
 
 Features:
-- Connect 5 Win Condition: Players must connect 5 discs in a row to win.
+- Connect 4 Win Condition: Players must connect 4 discs in a row to win.
 - 1 Charge Per Special Move: Each player gets 1 use of REMOVE DISC and 1 use of DOUBLE DROP.
 - 3 Players: RED (P1), YELLOW (P2), GREEN (P3).
 - 8x7 Expanded Strategic Board Grid.
@@ -19,7 +19,7 @@ import arcade
 
 
 class Player(IntEnum):
-    """Enum representing the 3 players in Connect Five."""
+    """Enum representing the 3 players in Connect Four."""
     NONE = 0
     RED = 1
     YELLOW = 2
@@ -92,7 +92,6 @@ class NetworkManager:
                 self.clients.append(client_conn)
                 player_assigned = len(self.clients) + 1  # 2 for YELLOW, 3 for GREEN
 
-                # Send assigned player ID to connecting client
                 init_msg = (
                     json.dumps({
                         "type": "ASSIGN_PLAYER",
@@ -102,13 +101,11 @@ class NetworkManager:
                 )
                 client_conn.sendall(init_msg.encode("utf-8"))
 
-                # Listen to client messages
                 t = threading.Thread(
                     target=self._listen_thread, args=(client_conn,), daemon=True
                 )
                 t.start()
 
-                # Notify main window of client connection count
                 self.message_callback({
                     "type": "PLAYER_COUNT_UPDATE",
                     "count": len(self.clients) + 1
@@ -148,7 +145,6 @@ class NetworkManager:
                     if line.strip():
                         msg = json.loads(line.strip())
 
-                        # Host rebroadcasts messages to all other clients
                         if self.is_host:
                             for c in list(self.clients):
                                 if c != sock:
@@ -215,7 +211,7 @@ WINDOW_HEIGHT = (
     + ((BOARD_ROWS + 2) * MARGIN)
     + 100
 )
-WINDOW_TITLE = "Connect Five - 3-Player Edition"
+WINDOW_TITLE = "Connect Four - 3-Player Edition"
 
 COLOR_BG = (15, 23, 42)           # Dark slate background
 COLOR_BOARD = (30, 58, 138)       # Deep navy blue board
@@ -253,7 +249,7 @@ def get_player_name(player: Player) -> str:
 
 
 class Disc:
-    """Represents a single Connect Five disc piece."""
+    """Represents a single Connect Four disc piece."""
 
     def __init__(
         self,
@@ -298,7 +294,7 @@ class Disc:
 
 
 class Board:
-    """Manages the 3-player Connect Five game grid matrix and win detection logic."""
+    """Manages the 3-player Connect Four game grid matrix and win detection logic."""
 
     def __init__(self, rows: int = BOARD_ROWS, cols: int = BOARD_COLS):
         """Initialize an empty game board."""
@@ -367,7 +363,7 @@ class Board:
     def check_win_at_coordinate(
         self, row: int, col: int
     ) -> Optional[List[Tuple[int, int]]]:
-        """Check for 5-in-a-row by sampling coordinates around (row, col)."""
+        """Check for 4-in-a-row by sampling coordinates around (row, col)."""
         player = self.grid[row][col]
         if player == Player.NONE:
             return None
@@ -402,14 +398,14 @@ class Board:
                 r -= dr
                 c -= dc
 
-            # Require 5 in a row to win!
-            if len(winning_coords) >= 5:
-                return winning_coords[:5]
+            # Standard Connect 4: Require 4 in a row to win!
+            if len(winning_coords) >= 4:
+                return winning_coords[:4]
 
         return None
 
     def check_all_wins(self) -> Optional[Tuple[Player, List[Tuple[int, int]]]]:
-        """Scan entire grid to check if any player has formed 5-in-a-row."""
+        """Scan entire grid to check if any player has formed 4-in-a-row."""
         for r in range(self.rows):
             for c in range(self.cols):
                 if self.grid[r][c] != Player.NONE:
@@ -420,7 +416,7 @@ class Board:
 
 
 class ConnectFourWindow(arcade.Window):
-    """Main Arcade window for 3-player Connect Five visualization and interaction."""
+    """Main Arcade window for 3-player Connect Four visualization and interaction."""
 
     def __init__(self, fullscreen: bool = False):
         """Initialize window, game board, and UI state."""
@@ -789,7 +785,7 @@ class ConnectFourWindow(arcade.Window):
                 f"DOUBLE DROP: {self.double_drop_remaining} drop(s) left!"
             )
         else:
-            status_text = "Connect 5 to Win! Click column to drop disc."
+            status_text = "Connect 4 to Win! Click column to drop disc."
 
         arcade.draw_text(
             status_text,
@@ -817,7 +813,7 @@ class ConnectFourWindow(arcade.Window):
                     anchor_x="center", anchor_y="center", bold=True
                 )
         else:
-            turn_str = f"CONNECT 5 - TURN: {p_name}"
+            turn_str = f"CONNECT 4 - TURN: {p_name}"
             if is_my_turn:
                 turn_str += " (YOUR TURN!)"
             arcade.draw_text(
@@ -833,7 +829,7 @@ class ConnectFourWindow(arcade.Window):
         cy = self.height / 2
 
         arcade.draw_text(
-            "CONNECT FIVE - 3-PLAYER EDITION",
+            "CONNECT FOUR - 3-PLAYER EDITION",
             cx, cy + 160,
             arcade.color.WHITE, 20,
             anchor_x="center", anchor_y="center", bold=True
@@ -1075,7 +1071,6 @@ class ConnectFourWindow(arcade.Window):
                                 "player": self.current_player
                             })
 
-                        # Check if gravity shift created a win
                         win_info = self.board.check_all_wins()
                         if win_info:
                             self.game_over = True
