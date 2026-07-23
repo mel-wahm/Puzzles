@@ -1,13 +1,14 @@
-"""Connect Four Game in Python Arcade - 3-Player Edition.
+"""Connect Four Game in Python Arcade - 4-Player Edition.
 
 Features:
-- Connect 4 Win Condition: Players must connect 4 discs in a row to win.
+- 4 Players: RED (P1), YELLOW (P2), GREEN (P3), PURPLE (P4).
+- 10x7 Wider Strategic Board Grid.
+- 4-in-a-Row Win Condition.
+- Rotating Starting Player per Rematch (RED -> YELLOW -> GREEN -> PURPLE -> RED).
 - 1 Charge Per Special Move: Each player gets 1 use of REMOVE DISC and 1 use of DOUBLE DROP.
-- 3 Players: RED (P1), YELLOW (P2), GREEN (P3).
-- 8x7 Expanded Strategic Board Grid.
 - Single Special Move Per Turn Restriction.
 - REMOVE DISC Improvement: Removing a disc allows the player to drop their disc in the same turn.
-- 3-Player Wi-Fi LAN & Local Pass & Play Modes.
+- 4-Player Wi-Fi LAN & Local Pass & Play Modes.
 """
 
 from enum import Enum, IntEnum
@@ -19,11 +20,12 @@ import arcade
 
 
 class Player(IntEnum):
-    """Enum representing the 3 players in Connect Four."""
+    """Enum representing the 4 players in Connect Four."""
     NONE = 0
     RED = 1
     YELLOW = 2
     GREEN = 3
+    PURPLE = 4
 
 
 class SpecialMode(Enum):
@@ -54,7 +56,7 @@ def get_local_ip() -> str:
 
 
 class NetworkManager:
-    """Manages TCP socket networking for 3-player Wi-Fi LAN multiplayer."""
+    """Manages TCP socket networking for 4-player Wi-Fi LAN multiplayer."""
 
     def __init__(self, message_callback):
         """Initialize NetworkManager."""
@@ -68,7 +70,7 @@ class NetworkManager:
         self.port = 8888
 
     def start_host(self) -> None:
-        """Start TCP server thread to host a 3-player game."""
+        """Start TCP server thread to host a 4-player game."""
         self.is_host = True
         self.running = True
         self.clients.clear()
@@ -76,7 +78,7 @@ class NetworkManager:
         thread.start()
 
     def _host_thread(self) -> None:
-        """Background thread listening for 2 client connections (3 players total)."""
+        """Background thread listening for 3 client connections (4 players total)."""
         try:
             self.server_socket = socket.socket(
                 socket.AF_INET, socket.SOCK_STREAM
@@ -85,12 +87,12 @@ class NetworkManager:
                 socket.SOL_SOCKET, socket.SO_REUSEADDR, 1
             )
             self.server_socket.bind(("0.0.0.0", self.port))
-            self.server_socket.listen(2)
+            self.server_socket.listen(3)
 
-            while len(self.clients) < 2 and self.running:
+            while len(self.clients) < 3 and self.running:
                 client_conn, _ = self.server_socket.accept()
                 self.clients.append(client_conn)
-                player_assigned = len(self.clients) + 1  # 2 for YELLOW, 3 for GREEN
+                player_assigned = len(self.clients) + 1  # 2: YELLOW, 3: GREEN, 4: PURPLE
 
                 init_msg = (
                     json.dumps({
@@ -193,10 +195,10 @@ class NetworkManager:
                 pass
 
 
-# Global configuration constants
+# Global configuration constants (Wider 10x7 Grid)
 BOARD_ROWS = 7
-BOARD_COLS = 8
-CELL_SIZE = 75
+BOARD_COLS = 10
+CELL_SIZE = 70
 MARGIN = 10
 SIDE_PANEL_WIDTH = 270
 
@@ -211,7 +213,7 @@ WINDOW_HEIGHT = (
     + ((BOARD_ROWS + 2) * MARGIN)
     + 100
 )
-WINDOW_TITLE = "Connect Four - 3-Player Edition"
+WINDOW_TITLE = "Connect Four - 4-Player Edition"
 
 COLOR_BG = (15, 23, 42)           # Dark slate background
 COLOR_BOARD = (30, 58, 138)       # Deep navy blue board
@@ -220,6 +222,7 @@ COLOR_SLOT_EMPTY = (15, 23, 42)   # Empty slot background
 COLOR_RED = (239, 68, 68)         # Player 1 Vibrant Red
 COLOR_YELLOW = (252, 211, 77)     # Player 2 Vibrant Yellow
 COLOR_GREEN = (34, 197, 94)       # Player 3 Emerald Green
+COLOR_PURPLE = (168, 85, 247)     # Player 4 Vibrant Purple
 COLOR_WIN_LINE = (52, 211, 153)   # Mint green for winning highlight
 COLOR_BTN = (51, 65, 85)          # Button default color
 COLOR_BTN_ACTIVE = (16, 185, 129)  # Button active color
@@ -234,6 +237,8 @@ def get_player_color(player: Player):
         return COLOR_YELLOW
     elif player == Player.GREEN:
         return COLOR_GREEN
+    elif player == Player.PURPLE:
+        return COLOR_PURPLE
     return (148, 163, 184)
 
 
@@ -245,6 +250,8 @@ def get_player_name(player: Player) -> str:
         return "PLAYER 2 (YELLOW)"
     elif player == Player.GREEN:
         return "PLAYER 3 (GREEN)"
+    elif player == Player.PURPLE:
+        return "PLAYER 4 (PURPLE)"
     return "UNKNOWN"
 
 
@@ -294,7 +301,7 @@ class Disc:
 
 
 class Board:
-    """Manages the 3-player Connect Four game grid matrix and win detection logic."""
+    """Manages the 4-player Connect Four game grid matrix and win detection logic."""
 
     def __init__(self, rows: int = BOARD_ROWS, cols: int = BOARD_COLS):
         """Initialize an empty game board."""
@@ -398,7 +405,7 @@ class Board:
                 r -= dr
                 c -= dc
 
-            # Standard Connect 4: Require 4 in a row to win!
+            # Require 4 in a row to win!
             if len(winning_coords) >= 4:
                 return winning_coords[:4]
 
@@ -416,7 +423,7 @@ class Board:
 
 
 class ConnectFourWindow(arcade.Window):
-    """Main Arcade window for 3-player Connect Four visualization and interaction."""
+    """Main Arcade window for 4-player Connect Four visualization and interaction."""
 
     def __init__(self, fullscreen: bool = False):
         """Initialize window, game board, and UI state."""
@@ -441,16 +448,18 @@ class ConnectFourWindow(arcade.Window):
 
         self.input_ip = ""
 
-        # Special moves charges per player (1 charge each)
+        # Special moves charges per player (1 charge each for 4 players)
         self.remove_charges: Dict[Player, int] = {
             Player.RED: 1,
             Player.YELLOW: 1,
-            Player.GREEN: 1
+            Player.GREEN: 1,
+            Player.PURPLE: 1
         }
         self.double_drop_charges: Dict[Player, int] = {
             Player.RED: 1,
             Player.YELLOW: 1,
-            Player.GREEN: 1
+            Player.GREEN: 1,
+            Player.PURPLE: 1
         }
 
         # Restrictions: One trick per turn & Remove Disc drop state
@@ -468,7 +477,7 @@ class ConnectFourWindow(arcade.Window):
 
         elif msg_type == "PLAYER_COUNT_UPDATE":
             count = msg["count"]
-            if count >= 3 and self.net.is_host:
+            if count >= 4 and self.net.is_host:
                 self.state = GameState.PLAYING
                 self.net.send({"type": "START_GAME"})
 
@@ -476,6 +485,8 @@ class ConnectFourWindow(arcade.Window):
             self.state = GameState.PLAYING
 
         elif msg_type == "DROP":
+            if self.game_over:
+                return
             col = msg["col"]
             player = Player(msg["player"])
             placed = self.board.drop_disc(col, player)
@@ -502,6 +513,8 @@ class ConnectFourWindow(arcade.Window):
                         self.switch_turn()
 
         elif msg_type == "REMOVE":
+            if self.game_over:
+                return
             r = msg["row"]
             c = msg["col"]
             p = Player(msg["player"])
@@ -515,11 +528,13 @@ class ConnectFourWindow(arcade.Window):
 
         elif msg_type == "REQUEST_RESTART":
             if self.net.is_host:
-                # Rotate starter: RED -> YELLOW -> GREEN -> RED
+                # Rotate starter across 4 players: RED -> YELLOW -> GREEN -> PURPLE -> RED
                 if self.match_starter_player == Player.RED:
                     next_s = Player.YELLOW
                 elif self.match_starter_player == Player.YELLOW:
                     next_s = Player.GREEN
+                elif self.match_starter_player == Player.GREEN:
+                    next_s = Player.PURPLE
                 else:
                     next_s = Player.RED
                 self.restart_game(send_net=True, next_starter=next_s)
@@ -593,6 +608,8 @@ class ConnectFourWindow(arcade.Window):
                 self.match_starter_player = Player.YELLOW
             elif self.match_starter_player == Player.YELLOW:
                 self.match_starter_player = Player.GREEN
+            elif self.match_starter_player == Player.GREEN:
+                self.match_starter_player = Player.PURPLE
             else:
                 self.match_starter_player = Player.RED
 
@@ -601,10 +618,10 @@ class ConnectFourWindow(arcade.Window):
         self.winner = None
         self.winning_coords = None
         self.remove_charges = {
-            Player.RED: 1, Player.YELLOW: 1, Player.GREEN: 1
+            Player.RED: 1, Player.YELLOW: 1, Player.GREEN: 1, Player.PURPLE: 1
         }
         self.double_drop_charges = {
-            Player.RED: 1, Player.YELLOW: 1, Player.GREEN: 1
+            Player.RED: 1, Player.YELLOW: 1, Player.GREEN: 1, Player.PURPLE: 1
         }
         self.active_special_mode = SpecialMode.NONE
         self.trick_used_this_turn = False
@@ -618,11 +635,13 @@ class ConnectFourWindow(arcade.Window):
             })
 
     def switch_turn(self) -> None:
-        """Rotate turn sequentially to next player: RED -> YELLOW -> GREEN."""
+        """Rotate turn sequentially across 4 players: RED -> YELLOW -> GREEN -> PURPLE."""
         if self.current_player == Player.RED:
             self.current_player = Player.YELLOW
         elif self.current_player == Player.YELLOW:
             self.current_player = Player.GREEN
+        elif self.current_player == Player.GREEN:
+            self.current_player = Player.PURPLE
         else:
             self.current_player = Player.RED
 
@@ -855,12 +874,12 @@ class ConnectFourWindow(arcade.Window):
             )
 
     def _draw_lobby(self) -> None:
-        """Render 3-Player Network Lobby UI."""
+        """Render 4-Player Network Lobby UI."""
         cx = self.width / 2
         cy = self.height / 2
 
         arcade.draw_text(
-            "CONNECT FOUR - 3-PLAYER EDITION",
+            "CONNECT FOUR - 4-PLAYER EDITION",
             cx, cy + 160,
             arcade.color.WHITE, 20,
             anchor_x="center", anchor_y="center", bold=True
@@ -874,13 +893,13 @@ class ConnectFourWindow(arcade.Window):
 
         # Button 1: Host Game
         arcade.draw_rect_filled(
-            arcade.rect.XYWH(cx, cy + 30, 340, 50), COLOR_BTN
+            arcade.rect.XYWH(cx, cy + 30, 360, 50), COLOR_BTN
         )
         arcade.draw_rect_outline(
-            arcade.rect.XYWH(cx, cy + 30, 340, 50), (59, 130, 246), 2
+            arcade.rect.XYWH(cx, cy + 30, 360, 50), (59, 130, 246), 2
         )
         arcade.draw_text(
-            "1. HOST 3-PLAYER GAME (Host = P1 RED)",
+            "1. HOST 4-PLAYER GAME (Host = P1 RED)",
             cx, cy + 30,
             arcade.color.WHITE, 11,
             anchor_x="center", anchor_y="center", bold=True
@@ -888,13 +907,13 @@ class ConnectFourWindow(arcade.Window):
 
         # Button 2: Join Game
         arcade.draw_rect_filled(
-            arcade.rect.XYWH(cx, cy - 40, 340, 50), COLOR_BTN
+            arcade.rect.XYWH(cx, cy - 40, 360, 50), COLOR_BTN
         )
         arcade.draw_rect_outline(
-            arcade.rect.XYWH(cx, cy - 40, 340, 50), (252, 211, 77), 2
+            arcade.rect.XYWH(cx, cy - 40, 360, 50), (252, 211, 77), 2
         )
         arcade.draw_text(
-            "2. JOIN GAME (Client = P2 YELLOW or P3 GREEN)",
+            "2. JOIN GAME (Client = P2, P3, or P4)",
             cx, cy - 40,
             arcade.color.WHITE, 11,
             anchor_x="center", anchor_y="center", bold=True
@@ -902,32 +921,32 @@ class ConnectFourWindow(arcade.Window):
 
         # Button 3: Local Pass & Play
         arcade.draw_rect_filled(
-            arcade.rect.XYWH(cx, cy - 110, 340, 50), COLOR_BTN
+            arcade.rect.XYWH(cx, cy - 110, 360, 50), COLOR_BTN
         )
         arcade.draw_rect_outline(
-            arcade.rect.XYWH(cx, cy - 110, 340, 50), (148, 163, 184), 2
+            arcade.rect.XYWH(cx, cy - 110, 360, 50), (148, 163, 184), 2
         )
         arcade.draw_text(
-            "3. 3-PLAYER LOCAL PASS & PLAY (Offline)",
+            "3. 4-PLAYER LOCAL PASS & PLAY (Offline)",
             cx, cy - 110,
             arcade.color.WHITE, 11,
             anchor_x="center", anchor_y="center", bold=True
         )
 
     def _draw_waiting(self) -> None:
-        """Render Host Waiting Screen for 3 Players."""
+        """Render Host Waiting Screen for 4 Players."""
         cx = self.width / 2
         cy = self.height / 2
         connected_count = len(self.net.clients) + 1
 
         arcade.draw_text(
-            "HOSTING 3-PLAYER MATCH",
+            "HOSTING 4-PLAYER MATCH",
             cx, cy + 80,
             arcade.color.WHITE, 18,
             anchor_x="center", anchor_y="center", bold=True
         )
         arcade.draw_text(
-            f"Players Connected: {connected_count} / 3",
+            f"Players Connected: {connected_count} / 4",
             cx, cy + 35,
             (52, 211, 153), 15,
             anchor_x="center", anchor_y="center", bold=True
@@ -939,7 +958,7 @@ class ConnectFourWindow(arcade.Window):
             anchor_x="center", anchor_y="center", bold=True
         )
         arcade.draw_text(
-            "Game will start automatically when all 3 players connect...",
+            "Game will start automatically when all 4 players connect...",
             cx, cy - 100,
             (148, 163, 184), 11,
             anchor_x="center", anchor_y="center"
@@ -951,7 +970,7 @@ class ConnectFourWindow(arcade.Window):
         cy = self.height / 2
 
         arcade.draw_text(
-            "ENTER HOST IP ADDRESS TO JOIN 3-PLAYER MATCH",
+            "ENTER HOST IP ADDRESS TO JOIN 4-PLAYER MATCH",
             cx, cy + 80,
             arcade.color.WHITE, 16,
             anchor_x="center", anchor_y="center", bold=True
@@ -1005,21 +1024,21 @@ class ConnectFourWindow(arcade.Window):
 
         if self.state == GameState.LOBBY:
             # Button 1: HOST GAME
-            if abs(x - cx) <= 170 and abs(y - (cy + 30)) <= 25:
+            if abs(x - cx) <= 180 and abs(y - (cy + 30)) <= 25:
                 self.my_player = Player.RED
                 self.net.start_host()
                 self.state = GameState.WAITING_FOR_PLAYERS
                 return
 
             # Button 2: JOIN GAME
-            if abs(x - cx) <= 170 and abs(y - (cy - 40)) <= 25:
+            if abs(x - cx) <= 180 and abs(y - (cy - 40)) <= 25:
                 self.state = GameState.JOIN_INPUT
                 self.input_ip = ""
                 return
 
             # Button 3: LOCAL PASS & PLAY
-            if abs(x - cx) <= 170 and abs(y - (cy - 110)) <= 25:
-                self.my_player = None  # Offline 3-Player mode
+            if abs(x - cx) <= 180 and abs(y - (cy - 110)) <= 25:
+                self.my_player = None  # Offline 4-Player mode
                 self.state = GameState.PLAYING
                 return
 
@@ -1033,6 +1052,8 @@ class ConnectFourWindow(arcade.Window):
                         next_s = Player.YELLOW
                     elif self.match_starter_player == Player.YELLOW:
                         next_s = Player.GREEN
+                    elif self.match_starter_player == Player.GREEN:
+                        next_s = Player.PURPLE
                     else:
                         next_s = Player.RED
                     self.restart_game(send_net=True, next_starter=next_s)
@@ -1180,6 +1201,8 @@ class ConnectFourWindow(arcade.Window):
                         next_s = Player.YELLOW
                     elif self.match_starter_player == Player.YELLOW:
                         next_s = Player.GREEN
+                    elif self.match_starter_player == Player.GREEN:
+                        next_s = Player.PURPLE
                     else:
                         next_s = Player.RED
                     self.restart_game(send_net=True, next_starter=next_s)
