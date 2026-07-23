@@ -513,9 +513,20 @@ class ConnectFourWindow(arcade.Window):
                     self.game_over = True
                     self.winner, self.winning_coords = win_info
 
+        elif msg_type == "REQUEST_RESTART":
+            if self.net.is_host:
+                # Rotate starter: RED -> YELLOW -> GREEN -> RED
+                if self.match_starter_player == Player.RED:
+                    next_s = Player.YELLOW
+                elif self.match_starter_player == Player.YELLOW:
+                    next_s = Player.GREEN
+                else:
+                    next_s = Player.RED
+                self.restart_game(send_net=True, next_starter=next_s)
+
         elif msg_type == "RESTART":
             starter_val = msg.get("starter")
-            next_p = Player(starter_val) if starter_val else None
+            next_p = Player(starter_val) if starter_val else Player.RED
             self.restart_game(send_net=False, next_starter=next_p)
 
     def get_content_layout(
@@ -578,7 +589,6 @@ class ConnectFourWindow(arcade.Window):
         if next_starter is not None:
             self.match_starter_player = next_starter
         else:
-            # Rotate starting player sequentially: RED -> YELLOW -> GREEN -> RED
             if self.match_starter_player == Player.RED:
                 self.match_starter_player = Player.YELLOW
             elif self.match_starter_player == Player.YELLOW:
@@ -600,7 +610,8 @@ class ConnectFourWindow(arcade.Window):
         self.trick_used_this_turn = False
         self.removed_disc_this_turn = False
         self.double_drop_remaining = 0
-        if send_net and self.net.running:
+
+        if send_net and self.net.running and self.net.is_host:
             self.net.send({
                 "type": "RESTART",
                 "starter": self.match_starter_player.value
@@ -1016,7 +1027,19 @@ class ConnectFourWindow(arcade.Window):
             return
 
         if self.game_over:
-            self.restart_game()
+            if self.net.running:
+                if self.net.is_host:
+                    if self.match_starter_player == Player.RED:
+                        next_s = Player.YELLOW
+                    elif self.match_starter_player == Player.YELLOW:
+                        next_s = Player.GREEN
+                    else:
+                        next_s = Player.RED
+                    self.restart_game(send_net=True, next_starter=next_s)
+                else:
+                    self.net.send({"type": "REQUEST_RESTART"})
+            else:
+                self.restart_game(send_net=False)
             return
 
         if any(disc.falling for disc in self.board.discs):
@@ -1151,7 +1174,19 @@ class ConnectFourWindow(arcade.Window):
             return
 
         if symbol == arcade.key.R:
-            self.restart_game()
+            if self.net.running:
+                if self.net.is_host:
+                    if self.match_starter_player == Player.RED:
+                        next_s = Player.YELLOW
+                    elif self.match_starter_player == Player.YELLOW:
+                        next_s = Player.GREEN
+                    else:
+                        next_s = Player.RED
+                    self.restart_game(send_net=True, next_starter=next_s)
+                else:
+                    self.net.send({"type": "REQUEST_RESTART"})
+            else:
+                self.restart_game(send_net=False)
         elif symbol == arcade.key.F:
             self.set_fullscreen(not self.fullscreen)
         elif symbol == arcade.key.Q:

@@ -3,14 +3,15 @@
 /*                                                        :::      ::::::::   */
 /*   ft_ten_queens_puzzle.c                             :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: q- <q-@student.42.fr>                      +#+  +:+       +#+        */
+/*   By: mel-wahm <mel-wahm@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/07/21 02:29:22 by q-                #+#    #+#             */
-/*   Updated: 2026/07/21 14:06:22 by q-               ###   ########.fr       */
+/*   Updated: 2026/07/22 17:12:23 by mel-wahm         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include <unistd.h>
+#include <stdlib.h>
 
 static int	absolute(int b)
 {
@@ -48,7 +49,6 @@ static	int	is_valid(int *board, int col, int row)
 static void	place(int *board, int col, int *pos)
 {
 	int	row;
-
 	row = 0;
 	if (col == 10)
 		return ;
@@ -61,6 +61,7 @@ static void	place(int *board, int col, int *pos)
 			{
 				(*pos)++;
 				print_position(board);
+				exit(1);
 				break ;
 			}
 			place(board, col + 1, pos);
@@ -77,4 +78,9 @@ int	ft_ten_queens_puzzle(void)
 	pos = 0;
 	place(chess_board, 0, &pos);
 	return (pos);
+}
+
+int	main()
+{
+	ft_ten_queens_puzzle();
 }
