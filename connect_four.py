@@ -1,13 +1,15 @@
-"""Connect Four Game in Python Arcade - 4-Player Edition.
+"""Connect Four Game in Python Arcade - 4-Player Edition with Usernames & Secret Powers.
 
 Features:
+- Mandatory Username Input: Each player enters a custom username before joining/hosting.
+- Secret Powers / Fog of War: Other players' remaining special move charges are hidden from you!
 - 4 Players: RED (P1), YELLOW (P2), GREEN (P3), PURPLE (P4).
 - 10x7 Wider Strategic Board Grid.
 - 4-in-a-Row Win Condition.
-- Rotating Starting Player per Rematch (RED -> YELLOW -> GREEN -> PURPLE -> RED).
-- 1 Charge Per Special Move: Each player gets 1 use of REMOVE DISC and 1 use of DOUBLE DROP.
+- Rotating Starting Player per Rematch.
+- 1 Charge Per Special Move: 1 REMOVE DISC & 1 DOUBLE DROP.
 - Single Special Move Per Turn Restriction.
-- REMOVE DISC Improvement: Removing a disc allows the player to drop their disc in the same turn.
+- REMOVE DISC Turn Continuation.
 - 4-Player Wi-Fi LAN & Local Pass & Play Modes.
 """
 
@@ -213,7 +215,7 @@ WINDOW_HEIGHT = (
     + ((BOARD_ROWS + 2) * MARGIN)
     + 100
 )
-WINDOW_TITLE = "Connect Four - 4-Player Edition"
+WINDOW_TITLE = "Connect Four - Secret Powers & Usernames Edition"
 
 COLOR_BG = (15, 23, 42)           # Dark slate background
 COLOR_BOARD = (30, 58, 138)       # Deep navy blue board
@@ -240,19 +242,6 @@ def get_player_color(player: Player):
     elif player == Player.PURPLE:
         return COLOR_PURPLE
     return (148, 163, 184)
-
-
-def get_player_name(player: Player) -> str:
-    """Return string display name for given Player."""
-    if player == Player.RED:
-        return "PLAYER 1 (RED)"
-    elif player == Player.YELLOW:
-        return "PLAYER 2 (YELLOW)"
-    elif player == Player.GREEN:
-        return "PLAYER 3 (GREEN)"
-    elif player == Player.PURPLE:
-        return "PLAYER 4 (PURPLE)"
-    return "UNKNOWN"
 
 
 class Disc:
@@ -440,6 +429,17 @@ class ConnectFourWindow(arcade.Window):
         self.match_starter_player = Player.RED
         self.current_player = Player.RED
         self.my_player: Optional[Player] = None
+
+        # Usernames & Input fields
+        self.my_username = "Player1"
+        self.active_input_field = "USERNAME"  # "USERNAME" or "IP"
+        self.player_usernames: Dict[Player, str] = {
+            Player.RED: "Player 1",
+            Player.YELLOW: "Player 2",
+            Player.GREEN: "Player 3",
+            Player.PURPLE: "Player 4"
+        }
+
         self.game_over = False
         self.winner: Optional[Player] = None
         self.winning_coords: Optional[List[Tuple[int, int]]] = None
@@ -448,7 +448,7 @@ class ConnectFourWindow(arcade.Window):
 
         self.input_ip = ""
 
-        # Special moves charges per player (1 charge each for 4 players)
+        # Special moves charges per player (1 charge each)
         self.remove_charges: Dict[Player, int] = {
             Player.RED: 1,
             Player.YELLOW: 1,
@@ -468,12 +468,49 @@ class ConnectFourWindow(arcade.Window):
         self.removed_disc_this_turn = False
         self.double_drop_remaining = 0
 
+    def get_display_name(self, player: Player) -> str:
+        """Return formatted string display name (Username + Color) for player."""
+        uname = self.player_usernames.get(player, f"Player {player.value}")
+        if player == Player.RED:
+            return f"{uname} (RED)"
+        elif player == Player.YELLOW:
+            return f"{uname} (YELLOW)"
+        elif player == Player.GREEN:
+            return f"{uname} (GREEN)"
+        elif player == Player.PURPLE:
+            return f"{uname} (PURPLE)"
+        return uname
+
     def on_network_message(self, msg: dict) -> None:
         """Callback for handling incoming network messages."""
         msg_type = msg.get("type")
 
         if msg_type == "ASSIGN_PLAYER":
             self.my_player = Player(msg["player"])
+            # Broadcast my username to peers
+            self.net.send({
+                "type": "USER_INFO",
+                "player": self.my_player.value,
+                "username": self.my_username
+            })
+
+        elif msg_type == "USER_INFO":
+            p = Player(msg["player"])
+            uname = msg["username"]
+            self.player_usernames[p] = uname
+            if self.net.is_host:
+                # Host rebroadcasts all known usernames
+                self.net.send({
+                    "type": "SYNC_USERNAMES",
+                    "usernames": {
+                        k.value: v for k, v in self.player_usernames.items()
+                    }
+                })
+
+        elif msg_type == "SYNC_USERNAMES":
+            u_dict = msg["usernames"]
+            for k_str, v_name in u_dict.items():
+                self.player_usernames[Player(int(k_str))] = v_name
 
         elif msg_type == "PLAYER_COUNT_UPDATE":
             count = msg["count"]
@@ -528,7 +565,6 @@ class ConnectFourWindow(arcade.Window):
 
         elif msg_type == "REQUEST_RESTART":
             if self.net.is_host:
-                # Rotate starter across 4 players: RED -> YELLOW -> GREEN -> PURPLE -> RED
                 if self.match_starter_player == Player.RED:
                     next_s = Player.YELLOW
                 elif self.match_starter_player == Player.YELLOW:
@@ -651,7 +687,7 @@ class ConnectFourWindow(arcade.Window):
         self.double_drop_remaining = 0
 
     def on_draw(self) -> None:
-        """Render lobby or playing board HUD."""
+        """Render lobby or playing board HUD with Secret Powers & Usernames."""
         self.clear()
 
         if self.state == GameState.LOBBY:
@@ -733,7 +769,7 @@ class ConnectFourWindow(arcade.Window):
                 preview_x, preview_y, radius, preview_color
             )
 
-        # 7. Draw Side Control Panel
+        # 7. Draw Side Control Panel (FOG OF WAR / SECRET POWERS)
         arcade.draw_rect_filled(
             arcade.rect.XYWH(panel_cx, panel_cy, SIDE_PANEL_WIDTH, board_h),
             COLOR_PANEL
@@ -757,25 +793,33 @@ class ConnectFourWindow(arcade.Window):
             (71, 85, 105), 1
         )
 
-        p_name = get_player_name(self.current_player)
+        p_name = self.get_display_name(self.current_player)
         p_col = get_player_color(self.current_player)
         arcade.draw_text(
-            f"Active: {p_name}",
+            f"Turn: {p_name}",
             panel_cx, panel_cy + (board_h / 2) - 75,
-            p_col, 11,
+            p_col, 10,
             anchor_x="center", anchor_y="center", bold=True
         )
 
         btn_w = SIDE_PANEL_WIDTH - 40
         btn_h = 50
 
-        # Button 1: REMOVE DISC
-        btn1_y = panel_cy + 40
-        rem_count = self.remove_charges[self.current_player]
-        is_rem_active = (self.active_special_mode == SpecialMode.REMOVE)
+        # Secret Powers / Fog of War Logic:
+        # If in network mode and NOT your turn, opponents' remaining powers are hidden!
+        target_view_player = (
+            self.my_player if self.my_player is not None else self.current_player
+        )
+        is_viewing_own_powers = (target_view_player == self.current_player)
+
+        rem_count = self.remove_charges[target_view_player]
+        is_rem_active = (
+            self.active_special_mode == SpecialMode.REMOVE and is_my_turn
+        )
         rem_disabled = (
             self.trick_used_this_turn and not is_rem_active
-        ) or (rem_count <= 0)
+        ) or (rem_count <= 0) or not is_my_turn
+
         bg1 = (
             COLOR_BTN_DISABLED
             if rem_disabled
@@ -783,26 +827,29 @@ class ConnectFourWindow(arcade.Window):
         )
 
         arcade.draw_rect_filled(
-            arcade.rect.XYWH(panel_cx, btn1_y, btn_w, btn_h), bg1
+            arcade.rect.XYWH(panel_cx, panel_cy + 40, btn_w, btn_h), bg1
         )
         arcade.draw_rect_outline(
-            arcade.rect.XYWH(panel_cx, btn1_y, btn_w, btn_h),
+            arcade.rect.XYWH(panel_cx, panel_cy + 40, btn_w, btn_h),
             (239, 68, 68) if is_rem_active else (100, 116, 139), 2
         )
+
+        rem_label = f"1. REMOVE DISC (x{rem_count})"
         arcade.draw_text(
-            f"1. REMOVE DISC (x{rem_count})",
-            panel_cx, btn1_y,
+            rem_label,
+            panel_cx, panel_cy + 40,
             arcade.color.WHITE if not rem_disabled else (100, 116, 139), 11,
             anchor_x="center", anchor_y="center", bold=True
         )
 
-        # Button 2: DOUBLE DROP
-        btn2_y = panel_cy - 30
-        dd_count = self.double_drop_charges[self.current_player]
-        is_dd_active = (self.active_special_mode == SpecialMode.DOUBLE_DROP)
+        dd_count = self.double_drop_charges[target_view_player]
+        is_dd_active = (
+            self.active_special_mode == SpecialMode.DOUBLE_DROP and is_my_turn
+        )
         dd_disabled = (
             self.trick_used_this_turn and not is_dd_active
-        ) or (dd_count <= 0) or self.removed_disc_this_turn
+        ) or (dd_count <= 0) or self.removed_disc_this_turn or not is_my_turn
+
         bg2 = (
             COLOR_BTN_DISABLED
             if dd_disabled
@@ -810,22 +857,24 @@ class ConnectFourWindow(arcade.Window):
         )
 
         arcade.draw_rect_filled(
-            arcade.rect.XYWH(panel_cx, btn2_y, btn_w, btn_h), bg2
+            arcade.rect.XYWH(panel_cx, panel_cy - 30, btn_w, btn_h), bg2
         )
         arcade.draw_rect_outline(
-            arcade.rect.XYWH(panel_cx, btn2_y, btn_w, btn_h),
+            arcade.rect.XYWH(panel_cx, panel_cy - 30, btn_w, btn_h),
             (252, 211, 77) if is_dd_active else (100, 116, 139), 2
         )
+
+        dd_label = f"2. DOUBLE DROP (x{dd_count})"
         arcade.draw_text(
-            f"2. DOUBLE DROP (x{dd_count})",
-            panel_cx, btn2_y,
+            dd_label,
+            panel_cx, panel_cy - 30,
             arcade.color.WHITE if not dd_disabled else (100, 116, 139), 11,
             anchor_x="center", anchor_y="center", bold=True
         )
 
         # Status HUD Text
         if not is_my_turn:
-            status_text = "WAITING FOR PLAYER TURN..."
+            status_text = "OPPONENT TURN (POWERS HIDDEN 🔒)"
         elif self.active_special_mode == SpecialMode.REMOVE:
             status_text = "REMOVE MODE: Click opponent disc!"
         elif self.removed_disc_this_turn:
@@ -847,7 +896,7 @@ class ConnectFourWindow(arcade.Window):
         header_y = board_cy + (board_h / 2) + 30
         if self.game_over:
             if self.winner:
-                winner_name = get_player_name(self.winner)
+                winner_name = self.get_display_name(self.winner)
                 winner_col = get_player_color(self.winner)
                 arcade.draw_text(
                     f"VICTORY: {winner_name}!",
@@ -874,61 +923,81 @@ class ConnectFourWindow(arcade.Window):
             )
 
     def _draw_lobby(self) -> None:
-        """Render 4-Player Network Lobby UI."""
+        """Render 4-Player Network Lobby UI with Username Input."""
         cx = self.width / 2
         cy = self.height / 2
 
         arcade.draw_text(
-            "CONNECT FOUR - 4-PLAYER EDITION",
-            cx, cy + 160,
-            arcade.color.WHITE, 20,
+            "CONNECT FOUR - USERNAME & SECRET POWERS",
+            cx, cy + 180,
+            arcade.color.WHITE, 18,
             anchor_x="center", anchor_y="center", bold=True
         )
         arcade.draw_text(
             f"Your Local Wi-Fi IP: {self.net.local_ip}",
-            cx, cy + 120,
-            (52, 211, 153), 13,
+            cx, cy + 145,
+            (52, 211, 153), 12,
             anchor_x="center", anchor_y="center"
+        )
+
+        # Username Input Field Box
+        arcade.draw_text(
+            "Enter Your Username:",
+            cx - 180, cy + 95,
+            (203, 213, 225), 11,
+            anchor_x="left", anchor_y="center", bold=True
+        )
+        arcade.draw_rect_filled(
+            arcade.rect.XYWH(cx, cy + 65, 360, 40), (30, 41, 59)
+        )
+        arcade.draw_rect_outline(
+            arcade.rect.XYWH(cx, cy + 65, 360, 40), (59, 130, 246), 2
+        )
+        arcade.draw_text(
+            self.my_username if self.my_username else "Type Username...",
+            cx, cy + 65,
+            arcade.color.WHITE if self.my_username else (100, 116, 139), 12,
+            anchor_x="center", anchor_y="center", bold=True
         )
 
         # Button 1: Host Game
         arcade.draw_rect_filled(
-            arcade.rect.XYWH(cx, cy + 30, 360, 50), COLOR_BTN
+            arcade.rect.XYWH(cx, cy + 5, 360, 45), COLOR_BTN
         )
         arcade.draw_rect_outline(
-            arcade.rect.XYWH(cx, cy + 30, 360, 50), (59, 130, 246), 2
+            arcade.rect.XYWH(cx, cy + 5, 360, 45), (59, 130, 246), 2
         )
         arcade.draw_text(
             "1. HOST 4-PLAYER GAME (Host = P1 RED)",
-            cx, cy + 30,
+            cx, cy + 5,
             arcade.color.WHITE, 11,
             anchor_x="center", anchor_y="center", bold=True
         )
 
         # Button 2: Join Game
         arcade.draw_rect_filled(
-            arcade.rect.XYWH(cx, cy - 40, 360, 50), COLOR_BTN
+            arcade.rect.XYWH(cx, cy - 55, 360, 45), COLOR_BTN
         )
         arcade.draw_rect_outline(
-            arcade.rect.XYWH(cx, cy - 40, 360, 50), (252, 211, 77), 2
+            arcade.rect.XYWH(cx, cy - 55, 360, 45), (252, 211, 77), 2
         )
         arcade.draw_text(
             "2. JOIN GAME (Client = P2, P3, or P4)",
-            cx, cy - 40,
+            cx, cy - 55,
             arcade.color.WHITE, 11,
             anchor_x="center", anchor_y="center", bold=True
         )
 
         # Button 3: Local Pass & Play
         arcade.draw_rect_filled(
-            arcade.rect.XYWH(cx, cy - 110, 360, 50), COLOR_BTN
+            arcade.rect.XYWH(cx, cy - 115, 360, 45), COLOR_BTN
         )
         arcade.draw_rect_outline(
-            arcade.rect.XYWH(cx, cy - 110, 360, 50), (148, 163, 184), 2
+            arcade.rect.XYWH(cx, cy - 115, 360, 45), (148, 163, 184), 2
         )
         arcade.draw_text(
             "3. 4-PLAYER LOCAL PASS & PLAY (Offline)",
-            cx, cy - 110,
+            cx, cy - 115,
             arcade.color.WHITE, 11,
             anchor_x="center", anchor_y="center", bold=True
         )
@@ -940,9 +1009,9 @@ class ConnectFourWindow(arcade.Window):
         connected_count = len(self.net.clients) + 1
 
         arcade.draw_text(
-            "HOSTING 4-PLAYER MATCH",
+            f"HOSTING 4-PLAYER MATCH ({self.my_username})",
             cx, cy + 80,
-            arcade.color.WHITE, 18,
+            arcade.color.WHITE, 17,
             anchor_x="center", anchor_y="center", bold=True
         )
         arcade.draw_text(
@@ -970,8 +1039,14 @@ class ConnectFourWindow(arcade.Window):
         cy = self.height / 2
 
         arcade.draw_text(
-            "ENTER HOST IP ADDRESS TO JOIN 4-PLAYER MATCH",
-            cx, cy + 80,
+            f"CONNECTING AS: {self.my_username}",
+            cx, cy + 110,
+            (52, 211, 153), 14,
+            anchor_x="center", anchor_y="center", bold=True
+        )
+        arcade.draw_text(
+            "ENTER HOST IP ADDRESS TO JOIN",
+            cx, cy + 70,
             arcade.color.WHITE, 16,
             anchor_x="center", anchor_y="center", bold=True
         )
@@ -1023,22 +1098,30 @@ class ConnectFourWindow(arcade.Window):
         cy = self.height / 2
 
         if self.state == GameState.LOBBY:
+            # Check Username Input Box click
+            if abs(x - cx) <= 180 and abs(y - (cy + 65)) <= 20:
+                self.active_input_field = "USERNAME"
+                return
+
             # Button 1: HOST GAME
-            if abs(x - cx) <= 180 and abs(y - (cy + 30)) <= 25:
+            if abs(x - cx) <= 180 and abs(y - (cy + 5)) <= 22:
                 self.my_player = Player.RED
+                self.player_usernames[Player.RED] = self.my_username
                 self.net.start_host()
                 self.state = GameState.WAITING_FOR_PLAYERS
                 return
 
             # Button 2: JOIN GAME
-            if abs(x - cx) <= 180 and abs(y - (cy - 40)) <= 25:
+            if abs(x - cx) <= 180 and abs(y - (cy - 55)) <= 22:
+                self.active_input_field = "IP"
                 self.state = GameState.JOIN_INPUT
                 self.input_ip = ""
                 return
 
             # Button 3: LOCAL PASS & PLAY
-            if abs(x - cx) <= 180 and abs(y - (cy - 110)) <= 25:
-                self.my_player = None  # Offline 4-Player mode
+            if abs(x - cx) <= 180 and abs(y - (cy - 115)) <= 22:
+                self.my_player = None
+                self.player_usernames[Player.RED] = f"{self.my_username} (P1)"
                 self.state = GameState.PLAYING
                 return
 
@@ -1066,7 +1149,6 @@ class ConnectFourWindow(arcade.Window):
         if any(disc.falling for disc in self.board.discs):
             return
 
-        # Restrict move input if not your turn in network mode
         if self.my_player is not None and self.my_player != self.current_player:
             return
 
@@ -1181,7 +1263,7 @@ class ConnectFourWindow(arcade.Window):
                         self.switch_turn()
 
     def on_key_press(self, symbol: int, modifiers: int) -> None:
-        """Handle keyboard input for IP typing and shortcuts."""
+        """Handle keyboard input for IP typing, username, and shortcuts."""
         if self.state == GameState.JOIN_INPUT:
             if symbol == arcade.key.ENTER:
                 if self.input_ip.strip():
@@ -1217,10 +1299,20 @@ class ConnectFourWindow(arcade.Window):
             self.close()
 
     def on_text(self, text: str) -> None:
-        """Capture text input for host IP address."""
-        if self.state == GameState.JOIN_INPUT:
+        """Capture text input for Username or Host IP address."""
+        if self.state == GameState.LOBBY:
+            if text in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_- ":
+                if len(self.my_username) < 15:
+                    self.my_username += text
+        elif self.state == GameState.JOIN_INPUT:
             if text in "0123456789.":
                 self.input_ip += text
+
+    def on_key_release(self, symbol: int, modifiers: int) -> None:
+        """Handle Backspace for Username input in Lobby."""
+        if self.state == GameState.LOBBY:
+            if symbol == arcade.key.BACKSPACE:
+                self.my_username = self.my_username[:-1]
 
 
 def main():

@@ -1,9 +1,11 @@
-# Connect Four - 4-Player Edition
+# Connect Four - Usernames & Secret Powers Edition
 
 Location: `~/projects/puzzles/connect_four.py`
 
-## Features
+## New Features
 
+* **Custom Username Input**: Enter your custom username on the lobby screen before hosting or joining a match.
+* **Secret Powers (Fog of War)**: Opponents' remaining special move charges are **HIDDEN 🔒** from your screen! You can only see your own remaining charges on your side panel.
 * **4 Players**: 🔴 RED (P1), 🟡 YELLOW (P2), 🟢 GREEN (P3), 🟣 PURPLE (P4).
 * **Wider 10x7 Grid**: 10 columns by 7 rows for tactical 4-player matches.
 * **4 Discs Win Condition**: Connect **4 in a row** (horizontally, vertically, or diagonally) to claim victory.
