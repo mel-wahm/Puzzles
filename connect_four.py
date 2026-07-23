@@ -430,6 +430,7 @@ class ConnectFourWindow(arcade.Window):
         self.net = NetworkManager(self.on_network_message)
 
         self.board = Board(BOARD_ROWS, BOARD_COLS)
+        self.match_starter_player = Player.RED
         self.current_player = Player.RED
         self.my_player: Optional[Player] = None
         self.game_over = False
@@ -513,7 +514,9 @@ class ConnectFourWindow(arcade.Window):
                     self.winner, self.winning_coords = win_info
 
         elif msg_type == "RESTART":
-            self.restart_game(send_net=False)
+            starter_val = msg.get("starter")
+            next_p = Player(starter_val) if starter_val else None
+            self.restart_game(send_net=False, next_starter=next_p)
 
     def get_content_layout(
         self
@@ -566,10 +569,24 @@ class ConnectFourWindow(arcade.Window):
                 return (r, col)
         return None
 
-    def restart_game(self, send_net: bool = True) -> None:
-        """Reset board and start a new game."""
+    def restart_game(
+        self, send_net: bool = True, next_starter: Optional[Player] = None
+    ) -> None:
+        """Reset board and start a new game with rotating starting player."""
         self.board.reset()
-        self.current_player = Player.RED
+
+        if next_starter is not None:
+            self.match_starter_player = next_starter
+        else:
+            # Rotate starting player sequentially: RED -> YELLOW -> GREEN -> RED
+            if self.match_starter_player == Player.RED:
+                self.match_starter_player = Player.YELLOW
+            elif self.match_starter_player == Player.YELLOW:
+                self.match_starter_player = Player.GREEN
+            else:
+                self.match_starter_player = Player.RED
+
+        self.current_player = self.match_starter_player
         self.game_over = False
         self.winner = None
         self.winning_coords = None
@@ -584,7 +601,10 @@ class ConnectFourWindow(arcade.Window):
         self.removed_disc_this_turn = False
         self.double_drop_remaining = 0
         if send_net and self.net.running:
-            self.net.send({"type": "RESTART"})
+            self.net.send({
+                "type": "RESTART",
+                "starter": self.match_starter_player.value
+            })
 
     def switch_turn(self) -> None:
         """Rotate turn sequentially to next player: RED -> YELLOW -> GREEN."""
